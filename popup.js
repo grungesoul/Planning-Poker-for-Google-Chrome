@@ -90,6 +90,7 @@ document.addEventListener('DOMContentLoaded', function() {
       playerDiv.className = 'player-input';
       
       const playerLabel = document.createElement('div');
+      playerLabel.className = 'player-name';
       playerLabel.style.width = '40%';
       playerLabel.textContent = player;
       
@@ -119,57 +120,65 @@ document.addEventListener('DOMContentLoaded', function() {
   function calculateResult() {
     const taskName = taskNameInput.value;
     if (!taskName) {
-      alert('Please enter a task name');
+      showError('Please enter a task name');
       return;
     }
 
-    const estimateSelects = Array.from(document.getElementsByClassName('player-estimate'));
+    const playerInputs = document.querySelectorAll('.player-input');
+    if (playerInputs.length === 0) {
+      showError('Please add team members in Settings first');
+      return;
+    }
+
+    // Get all selects and check if any has no value selected
+    const selects = Array.from(document.querySelectorAll('.player-estimate'));
+    const emptyVotes = selects.some(select => !select.value);
+
+    if (emptyVotes) {
+      showError('All team members must vote before calculating');
+      return;
+    }
+
+    // If we get here, everyone has voted
+    const votes = selects.map(select => parseInt(select.value));
     
-    if (estimateSelects.length === 0) {
-      alert('Please add team members in Settings first');
-      return;
-    }
-
-    // Check if all players have voted (no default value)
-    const nonVotedPlayers = estimateSelects.filter(select => select.value === "");
-    if (nonVotedPlayers.length > 0) {
-      const playerNames = Array.from(document.querySelectorAll('.player-input'))
-        .filter((div, index) => !estimateSelects[index].value)
-        .map(div => div.querySelector('div').textContent)
-        .join(', ');
-      
-      alert(`All team members must vote before calculating.\nWaiting for: ${playerNames}`);
-      return;
-    }
-
-    const estimates = estimateSelects.map(select => parseInt(select.value));
-    
-    // Calculate the most common estimate (mode)
+    // Find most common vote
     const counts = {};
     let maxCount = 0;
-    let mostCommon = estimates[0];
+    let mostCommon = votes[0];
 
-    estimates.forEach(num => {
-      counts[num] = (counts[num] || 0) + 1;
-      if (counts[num] > maxCount) {
-        maxCount = counts[num];
-        mostCommon = num;
+    votes.forEach(vote => {
+      counts[vote] = (counts[vote] || 0) + 1;
+      if (counts[vote] > maxCount) {
+        maxCount = counts[vote];
+        mostCommon = vote;
       }
     });
-    
+
+    // Hide error message if it exists
+    const errorDiv = document.getElementById('error-message');
+    if (errorDiv) {
+      errorDiv.classList.remove('visible');
+    }
+
     const result = {
       taskName,
       estimate: mostCommon,
       votes: maxCount,
-      totalVotes: estimates.length,
+      totalVotes: votes.length,
       timestamp: new Date().toISOString()
     };
 
-    // Save to history
     saveToHistory(result);
-    
-    // Show result
     showResult(result);
+  }
+
+  function showError(message) {
+    const errorDiv = document.getElementById('error-message');
+    if (errorDiv) {
+      errorDiv.textContent = message;
+      errorDiv.classList.add('visible');
+    }
   }
 
   function showResult(result) {
@@ -177,8 +186,36 @@ document.addEventListener('DOMContentLoaded', function() {
     resultSection.innerHTML = `
       <strong>${result.taskName}</strong><br>
       Most common estimate: ${result.estimate} points<br>
-      (${result.votes} out of ${result.totalVotes} votes)
+      (${result.votes} out of ${result.totalVotes} votes)<br><br>
+      <button id="new-vote" class="secondary">Start New Vote</button>
     `;
+
+    // Add event listener to the new button
+    document.getElementById('new-vote').addEventListener('click', startNewVote);
+  }
+
+  function startNewVote() {
+    // Clear task name
+    taskNameInput.value = '';
+    
+    // Reset all select elements to default
+    const selects = document.querySelectorAll('.player-estimate');
+    selects.forEach(select => {
+      select.value = "";
+    });
+
+    // Hide result section
+    resultSection.classList.add('hidden');
+    
+    // Clear any error messages
+    const errorDiv = document.getElementById('error-message');
+    if (errorDiv) {
+      errorDiv.classList.remove('visible');
+      errorDiv.textContent = '';
+    }
+
+    // Focus on task name input
+    taskNameInput.focus();
   }
 
   function saveToHistory(result) {
